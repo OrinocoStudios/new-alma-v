@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Alma Venezuela Connect
 
-## Getting Started
+Aplicación web para gestión de socios y grupos familiares de la Asociación Alma Venezuela.
 
-First, run the development server:
+## Stack Tecnológico
 
+- **Frontend**: Next.js 14+ con React y TypeScript
+- **Estilos**: Tailwind CSS
+- **Base de Datos**: PostgreSQL
+- **ORM**: Prisma
+- **Validaciones**: Zod + React Hook Form
+
+## Características
+
+- ✅ Autenticación de socio (ID + Documento)
+- ✅ Gestión de grupo familiar
+- ✅ Validación de documentos (DNI, NIE, Pasaporte)
+- ✅ Filtros dependientes (País → Estados → Ciudades)
+- ✅ Gestión de direcciones
+- ✅ Interfaz responsive
+
+## Inicio Rápido
+
+### 1. Instalar dependencias
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configurar .env.local
+```
+DATABASE_URL="postgresql://user:password@localhost:5432/alma_venezuela"
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Configurar Prisma
+```bash
+npx prisma generate
+npx prisma db push
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Ejecutar en desarrollo
+```bash
+npm run dev
+```
 
-## Learn More
+Abrir [http://localhost:3000](http://localhost:3000)
 
-To learn more about Next.js, take a look at the following resources:
+## API Endpoints
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `POST /api/auth/login` - Autenticación
+- `GET/POST/PUT /api/asociados` - Gestión de familia
+- `GET/POST/PUT /api/direcciones` - Gestión de direcciones
+- `GET /api/filters` - Filtros dinámicos
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Build y Deploy
 
-## Deploy on Vercel
+```bash
+npm run build
+npm start
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Listo para Vercel o cualquier host Node.js.

@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Tabla de países
+model Pais {
+  id                Int      @id @default(autoincrement())
+  pais_nro          Int      @unique
+  pais              String   @db.VarChar(50)
+  codigo            String   @db.VarChar(3)
+  iso_2             String   @db.VarChar(2)
+  iso_3             String   @db.VarChar(3)
+  moneda            String   @db.VarChar(15)
+  continente        String   @db.VarChar(4)
+  
+  // Relaciones
+  estados           Estado[]
+  ciudades          Ciudad[]
+  codigosPostales   CodigoPostal[]
+  asociados         Asociado[] @relation("birthCountry")
+  nacionalidades    Asociado[] @relation("nationality")
+  
+  @@map("paises")
+}
+
+// Tabla de estados (solo para Venezuela)
+model Estado {
+  id                Int      @id @default(autoincrement())
+  id_pais           Int
+  id_estado_cid     String   @db.VarChar(5)
+  estado            String   @db.VarChar(50)
+  capital           String   @db.VarChar(50)
+  
+  // Relaciones
+  pais              Pais     @relation(fields: [id_pais], references: [id])
+  ciudades          Ciudad[]
+  asociados         Asociado[] @relation("birthState")
+  
+  @@map("estados")
+}
+
+// Tabla de ciudades
+model Ciudad {
+  id                Int      @id @default(autoincrement())
+  id_pais           Int
+  id_estado         Int?
+  id_ciudad         Int      @unique
+  ciudad            String   @db.VarChar(50)
+  
+  // Relaciones
+  pais              Pais     @relation(fields: [id_pais], references: [id])
+  estado            Estado?  @relation(fields: [id_estado], references: [id])
+  asociados         Asociado[] @relation("birthCity")
+  
+  @@map("ciudades")
+}
+
+// Tabla de códigos postales
+model CodigoPostal {
+  id                Int      @id @default(autoincrement())
+  provincia         String   @db.VarChar(50)
+  ciudad            String   @db.VarChar(50)
+  cp                String   @db.VarChar(5) @unique
+  id_pais           Int
+  
+  // Relaciones
+  pais              Pais     @relation(fields: [id_pais], references: [id])
+  direcciones       Direccion[]
+  
+  @@map("codigos_postales")
+}
+
+// Tabla de tipos de vía
+model TipoVia {
+  id                Int      @id @default(autoincrement())
+  tipo_via          String   @db.VarChar(50) @unique
+  
+  // Relaciones
+  direcciones       Direccion[]
+  
+  @@map("tipos_via")
+}
+
+// Tabla de administradores
+model Admin {
+  id                Int      @id @default(autoincrement())
+  usuario           String   @unique @db.VarChar(50)
+  password          String   @db.VarChar(255)
+  nombres           String   @db.VarChar(30)
+  apellido1re       String   @db.VarChar(15)
+  apellido2do       String   @db.VarChar(15)
+  rol               String   @db.VarChar(20) @default("admin") // admin, moderator
+  activo            Int      @db.SmallInt @default(1)
+  fecha_creacion    DateTime @default(now())
+  
+  // Relaciones
+  socios            Socio[]
+  
+  @@map("admins")
+}
+
+// Tabla de socios (cuenta principal)
+model Socio {
+  id                Int      @id @default(autoincrement())
+  id_socio          Int      @unique
+  id_admin          Int
+  nombres           String   @db.VarChar(30)
+  apellido1re       String   @db.VarChar(15)
+  apellido2do       String   @db.VarChar(15)
+  miembroprincipal  Int      @db.SmallInt @default(1)
+  
+  // Relaciones
+  admin             Admin     @relation(fields: [id_admin], references: [id])
+  asociados         Asociado[]
+  direcciones       Direccion[]
+  
+  @@map("socios")
+}
+
+// Tabla de asociados (grupo familiar)
+model Asociado {
+  id                Int      @id @default(autoincrement())
+  id_socio          Int
+  id_asociado       Int
+  tipo_documento    String   @db.VarChar(3) // DNI, PS (pasaporte), N (NIE), OTR (otros)
+  numero_documento  String   @db.VarChar(15) @unique
+  nombres           String   @db.VarChar(30)
+  apellido1re       String   @db.VarChar(15)
+  apellido2do       String   @db.VarChar(15)
+  fecha_nacimiento  DateTime @db.Date
+  genero            String   @db.VarChar(1) // H (hembra), M (macho)
+  nacionalidad      Int
+  pais_nacimiento   Int
+  estado_nacimiento Int?
+  ciudad_nacimiento Int?
+  numero_telefonico String?   @db.VarChar(20)
+  ocupacion         String?   @db.VarChar(100)
+  profesion         String?   @db.VarChar(100)
+  miembroPrincipal  Int      @db.SmallInt @default(0)
+  alimentacion1     Int      @db.SmallInt @default(1)
+  
+  // Relaciones
+  socio             Socio     @relation(fields: [id_socio], references: [id])
+  paisNacionalidad  Pais      @relation("nationality", fields: [nacionalidad], references: [id])
+  paisNacimiento    Pais      @relation("birthCountry", fields: [pais_nacimiento], references: [id])
+  estadoNacimiento  Estado?   @relation("birthState", fields: [estado_nacimiento], references: [id])
+  ciudadNacimiento  Ciudad?   @relation("birthCity", fields: [ciudad_nacimiento], references: [id])
+  
+  @@unique([id_socio, id_asociado])
+  @@map("asociados")
+}
+
+// Tabla de direcciones
+model Direccion {
+  id                Int      @id @default(autoincrement())
+  id_socio          Int
+  id_tipo_via       Int
+  nombre_via        String   @db.VarChar(255)
+  numero            String   @db.VarChar(10)
+  portal            String   @db.VarChar(5)
+  piso              String   @db.VarChar(10)
+  apartamento       String   @db.VarChar(10)
+  pueblo            String   @db.VarChar(1) // 1=sector, 2=organización, 3=pueblo
+  nombre_pueblo     String   @db.VarChar(255)
+  codigo_postal     String   @db.VarChar(5)
+  activa            Int      @db.SmallInt @default(1)
+  
+  // Relaciones
+  socio             Socio     @relation(fields: [id_socio], references: [id])
+  tipoVia           TipoVia   @relation(fields: [id_tipo_via], references: [id])
+  codigoPostal      CodigoPostal @relation(fields: [codigo_postal], references: [cp])
+  
+  @@map("direcciones")
+}
