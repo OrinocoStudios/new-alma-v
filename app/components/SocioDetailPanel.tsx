@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AddAsociadoModal } from './AddAsociadoModal';
+import AddDireccionModal from './AddDireccionModal';
 
 interface SocioDetail {
   id: number;
@@ -59,6 +60,7 @@ export function SocioDetailPanel({ socioId }: { socioId: number }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(true);
   const [showAddAsociadoModal, setShowAddAsociadoModal] = useState(false);
+  const [showAddDireccionModal, setShowAddDireccionModal] = useState(false);
   const [editData, setEditData] = useState({
     nombres: '',
     apellido1re: '',
@@ -412,7 +414,18 @@ export function SocioDetailPanel({ socioId }: { socioId: number }) {
         )}
 
         {activeTab === 'direcciones' && (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="space-y-4">
+            {/* Botón para agregar dirección */}
+            <button
+              onClick={() => setShowAddDireccionModal(true)}
+              className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center gap-2"
+            >
+              <span>+</span>
+              Agregar Dirección
+            </button>
+
+            {/* Lista de direcciones */}
+            <div className="bg-white rounded-lg shadow overflow-hidden">
             {direcciones.length === 0 ? (
               <div className="p-6 text-center text-gray-600">
                 No hay direcciones registradas
@@ -453,6 +466,7 @@ export function SocioDetailPanel({ socioId }: { socioId: number }) {
                 ))}
               </div>
             )}
+            </div>
           </div>
         )}
 
@@ -460,6 +474,14 @@ export function SocioDetailPanel({ socioId }: { socioId: number }) {
         <AddAsociadoModal
           isOpen={showAddAsociadoModal}
           onClose={() => setShowAddAsociadoModal(false)}
+          onSuccess={fetchSocioDetails}
+          socioId={socioId}
+        />
+
+        {/* Modal para agregar dirección */}
+        <AddDireccionModal
+          isOpen={showAddDireccionModal}
+          onClose={() => setShowAddDireccionModal(false)}
           onSuccess={fetchSocioDetails}
           socioId={socioId}
         />
