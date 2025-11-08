@@ -1,5 +1,5 @@
-import { SociosPanel } from '@/app/components/SociosPanel';
+import { FamiliasPanel } from '@/app/components/FamiliasPanel';
 
 export default function SociosPage() {
-  return <SociosPanel />;
+  return <FamiliasPanel />;
 }

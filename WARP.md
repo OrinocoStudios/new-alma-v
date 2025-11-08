@@ -14,130 +14,213 @@ npm start                    # Start production server
 npm run lint                 # Run ESLint
 
 # Database
-npx prisma generate         # Generate Prisma client
+npx prisma generate         # Generate Prisma client (run after pulling schema changes)
 npx prisma db push          # Push schema changes to database
 npx prisma studio          # Open Prisma Studio UI for database inspection
+
+# Seeding
 npm run seed                 # Seed database with initial admin user and Spain data
+npm run seed:larioja        # Seed La Rioja specific data (postal codes and street types)
 ```
 
 ## Architecture Overview
 
-**Tech Stack**: Next.js 14 + React 19 + TypeScript + PostgreSQL + Prisma
+**Tech Stack**: Next.js 16 + React 19 + TypeScript + PostgreSQL + Prisma ORM
 
-### Core Architecture
+⚠️ **Note**: This project uses React 19 and Next.js React Compiler (experimental features). Some debugging patterns may behave differently.
 
-This is a full-stack family management system for Alma Venezuela. The application has two main user flows: **Admin** (management panel) and **Socio** (main account user). Architecture follows Next.js App Router patterns with clear separation:
+This is a full-stack family management system for Alma Venezuela with dual authentication:
 
-- **Authentication**: Dual-layer with Admin (session-based) and Socio authentication
-- **Data Layer**: Prisma ORM with PostgreSQL
-- **Validation**: Zod schemas with React Hook Form
-- **Styling**: Tailwind CSS 4
+1. **Admin Panel** - Administrative interface for managing families and members
+2. **Familia Dashboard** - End-user accounts for family data self-management
+
+**Key Architectural Patterns**:
+- Dual authentication system (Admin session-based, Familia ID+document validation)
+- Prisma ORM with PostgreSQL backend
+- Zod schemas with React Hook Form for type-safe validation
+- Tailwind CSS 4 for styling
+- Standard Next.js App Router structure: `/app` for routes, `/app/api` for endpoints, `/app/components` for shared components
+
+### Database Hierarchy
+
+The system organizes data in a hierarchical structure:
+
+1. **`Familia`** (Main Account) - Top-level entity representing a family unit
+   - Linked to one principal member via unique `id_socio` field (references `Socio` table)
+   - Contains multiple `Miembro` records (family members)
+   - Contains multiple `Direccion` records (addresses)
+
+2. **`Miembro`** (Family Member) - Individual people associated with a Familia
+   - Validates via document type (DNI, NIE, Pasaporte, Otro)
+   - Stores birth location information (country, state, city)
+   - Tracks relationship role and dietary preferences
+   - One record marked as principal (`esPrincipal = 1`)
+
+3. **`Direccion`** (Address) - Address records linked to Familia
+   - References street type (`TipoVia`) from La Rioja dataset
+   - References postal code (`CodigoPostal`) for validation
+   - Supports multiple address types (sector, organization, pueblo)
+
+4. **Location & Reference Tables**:
+   - `Pais` - Countries (Spain required for initial data)
+   - `Estado` - States/Provinces (Venezuela data included)
+   - `Ciudad` - Cities
+   - `CodigoPostal` - Postal codes (La Rioja dataset: 26xxx range)
+   - `TipoVia` - Street types (12 types from La Rioja seed)
+
+5. **`Admin`** - Administrator accounts for management functions
+   - Supports role-based access (admin, moderator)
+   - Passwords hashed with bcryptjs
+
+6. **`Socio`** - Legacy principal member table (kept for backwards compatibility with `id_socio` references)
+
+### Data Storage Notes
+
+- **Date Fields**: Stored as `YYYY-MM-DD` in database; UI converts to/from `DD/MM/YYYY`
+- **Boolean Fields**: Stored as `TinyInt` (0=false, 1=true): `esPrincipal`, `alimentacion1`, `activa`
+- **Document Types**: DNI (8 digits + letter), NIE (X/Y/Z + 7 digits + letter), PS (Passport), OTR (Other)
+- **Gender**: H (Hembra/Female), M (Macho/Male)
 
 ### API Layer (`/app/api`)
 
-RESTful API routes following Next.js conventions:
+RESTful API routes following Next.js conventions with consistent error handling.
 
-- **`/auth/login`**: POST - Authenticate socio (main account) with ID + document number
-- **`/asociados`**: GET/POST/PUT - CRUD operations for family members
-- **`/direcciones`**: GET/POST/PUT - CRUD operations for addresses  
-- **`/filters`**: GET - Dynamic filters (countries, states, cities, postal codes, address types)
+**Authentication Routes**:
+- **`POST /api/auth/admin/login`**: Admin authentication (username + password with bcryptjs)
+- **`POST /api/auth/admin/logout`**: Clear admin session
+- **`POST /api/auth/login`**: Familia authentication (ID + document number)
+
+**Familia & Miembro Management**:
+- **`GET/POST /api/familias`**: List/create families
+- **`GET /api/familias/[id]`**: Fetch specific familia with miembros
+- **`GET/POST/PUT /api/miembros`**: CRUD operations for family members (cascading validation)
+
+**Address Management**:
+- **`GET/POST/PUT /api/direcciones`**: CRUD operations for addresses
+
+**Dynamic Filters**:
+- **`GET /api/filters`**: Dynamic dropdown data (paises, estados, ciudades, codigo_postal, tipos_via)
 
 All routes validate input with Zod schemas and return appropriate HTTP status codes.
 
 ### Admin Flow
 
-**Routes**:
-- **`/api/auth/admin/login`**: POST - Authenticate admin with username + password (bcryptjs hashing)
-- **`/api/auth/admin/logout`**: POST - Clear admin session
-- **`/socios`**: Admin panel showing all socios and families
-- **`/socios/[id]`**: Detailed view of a socio's family and addresses
+**Purpose**: Administrative interface for managing all families in the system.
 
-**Components**:
-- **`AdminLoginForm.tsx`**: Admin authentication
-- **`SociosPanel.tsx`**: List of all socios (admin view)
-- **`SocioDetailPanel.tsx`**: Details of a specific socio's associates and addresses
-- **`AddSocioForm.tsx`**: Form to register new socios (admin only)
+**Access**: `/` (admin login) → `/familias` (list) → `/familias/[id]` (detail)
 
-### Socio Flow
+**Key Features**:
+- Username/password authentication (bcryptjs hashed)
+- Session-based access control
+- View all families with search/filter
+- Create new familia records
+- View/edit miembros and direcciones for any familia
 
-**Routes**:
-- **`/api/auth/login`**: POST - Authenticate socio (legacy) with ID + document number
-- **`/api/socios`**: GET/POST/PUT - CRUD for socios (by admin)
-- **`/api/socios/[id]`**: GET - Fetch specific socio details
-- **`/dashboard/[id]`**: Socio dashboard (post-authentication) showing family members and addresses
+**Main Components**:
+- `AdminLoginForm.tsx` - Admin credentials form
+- `FamiliasPanel.tsx` - Family list with search
+- `SocioDetailPanel.tsx` - Familia detail with members and addresses (⚠️ component name uses legacy "Socio" terminology)
+- `CreateFamiliaForm.tsx` - New family registration
 
-**Components**:
-- **`LoginForm.tsx`**: Socio authentication form
-- **`AsociadoForm.tsx`**: Add/edit family members with cascading filters
-- **`AddAsociadoModal.tsx`**: Modal wrapper for adding family members
+### Familia Flow
 
-### Data Model (`prisma/schema.prisma`)
+**Purpose**: Self-service dashboard for families to manage their own data.
 
-The database uses a hierarchical structure:
+**Access**: `/` (familia login) → `/dashboard/[id]` (dashboard)
 
-1. **`Socio`** (Main Account) - Top-level user account (id_socio must be unique)
-2. **`Asociado`** (Family Member) - Associated people linked to a Socio
-3. **`Direccion`** (Address) - Address records for a Socio
-4. **Location Tables** - `Pais`, `Estado`, `Ciudad`, `CodigoPostal`, `TipoVia` for geographical and address data
+**Key Features**:
+- ID + document number authentication (no password)
+- sessionStorage-based login (⚠️ **NOT production-ready** - see Security Limitations)
+- View/add/edit own family members
+- Manage own addresses
+- No access to other families' data
 
-**Key Fields**:
-- Date fields use `DateTime @db.Date` format; stored as YYYY-MM-DD, converted to DD/MM/YYYY for UI
-- Document types: DNI (Spain), NIE (Spain), PS (Passport), OTR (Other)
-- Gender: H (Hembra/Female), M (Macho/Male)
-- Boolean fields stored as TinyInt (0/1): `miembroPrincipal`, `alimentacion1`, `activa`
+**Main Components**:
+- `LoginForm.tsx` - Familia authentication (ID + document)
+- `MiembroForm.tsx` - Add/edit members with cascading filters (country→state→city)
+- `FamiliaMembersList.tsx` - Member table display
+- `AddDireccionModal.tsx` - Address management modal
 
-### Components (`/app/components`)
-
-- **`LoginForm.tsx`**: Authentication form - validates socio ID and document number
-- **`AsociadoForm.tsx`**: Complex family member form with:
-  - Dependent country → state → city filters
-  - Document type validation (DNI/NIE/Passport/Other with specific patterns)
-  - Auto-nationality assignment based on document type
-  - Date formatting (DD/MM/YYYY input, YYYY-MM-DD database)
-  - Phone validation (9 digits for Spain)
-
-### Page Structure
-
-**Authentication**:
-- **`/`** (home): Login page (defaults to LoginForm for Socio, check logic for Admin redirect)
-
-**Admin Routes** (require admin auth):
-- **`/socios`**: Admin panel listing all socios
-- **`/socios/[id]`**: Socio detail page with family and address management
-
-**Socio Routes** (require socio auth):
-- **`/dashboard/[id]`**: Main dashboard with family member table, two tabs (Familia/Dirección), and add member form
+**Legacy Components** (⚠️ consider migrating or removing):
+- `FamiliaMemberForm.tsx` - Duplicate of MiembroForm.tsx
+- `AddAsociadoModal.tsx` - Uses old "Asociado" terminology
+- `/app/socios/` routes - Old route structure, use `/app/familias/` instead
 
 ## Development Patterns
 
-### Validation
+### Dual Authentication System
 
-All input validation uses Zod schemas in `/app/lib/validations.ts`. Each schema has:
-- Type-specific document validation (DNI regex: 8 digits + letter, NIE regex: X/Y/Z + 7 digits + letter)
-- Phone validation (exactly 9 digits)
-- Date format validation (DD/MM/YYYY input format)
-- Field length constraints
+The application implements two completely separate authentication flows:
 
-**Helper functions**: `formatDateForDB()`, `formatDateForDisplay()`, `validateDocumentByType()`, `getDefaultNationality()`
+| Aspect | Admin Auth | Familia Auth |
+|--------|-----------|-------------|
+| **Credentials** | Username + Password | ID (`id_socio`) + Document Number |
+| **Storage** | Server-side session/cookies | Client-side sessionStorage |
+| **Validation** | bcryptjs hash | Direct DB lookup |
+| **Protected Routes** | `/familias/*` | `/dashboard/[id]` |
+| **Access Scope** | All families (read/write) | Own family only (read/write) |
+| **Role System** | Yes (admin/moderator) | No |
+
+⚠️ **CRITICAL SECURITY ISSUE**: The Familia authentication using sessionStorage is **NOT production-ready**. Planned migration to JWT with secure HTTP-only cookies is required before production deployment (see Known Limitations).
+
+### Validation & Zod Schemas
+
+All input validation uses Zod schemas in `/app/lib/validations.ts`:
+
+- **Document Validation**:
+  - DNI: 8 digits + 1 letter (regex: `^\d{8}[A-Z]$`)
+  - NIE: X/Y/Z + 7 digits + 1 letter (regex: `^[XYZ]\d{7}[A-Z]$`)
+  - Passport: 10-15 alphanumeric characters
+  - Other: 10-15 characters (text, alphanumeric, or mixed)
+
+- **Phone Validation**: Exactly 9 digits for Spain
+- **Date Validation**: DD/MM/YYYY input format
+- **Field Constraints**:
+  - Nombres/Apellidos: max 30/15 characters
+  - Ocupación/Profesión: max 100 characters
+  - Postal Code: 5 digits
+  - Género: H or M only
+
+### Helper Functions
+
+Located in `/app/lib/validations.ts`:
+- `formatDateForDB(ddmmyyyyString)` - Convert DD/MM/YYYY to YYYY-MM-DD
+- `formatDateForDisplay(yyyymmddDate)` - Convert YYYY-MM-DD to DD/MM/YYYY
+- `validateDocumentByType(tipoDocumento, numero)` - Validate document by type
+- `getDefaultNationality(tipoDocumento)` - Auto-assign nationality based on document type
 
 ### Database Access
 
 - Singleton Prisma client in `/app/lib/db.ts`
 - All routes import: `import { prisma } from '@/app/lib/db'`
-- Path alias `@/*` resolves to project root
+- Path alias `@/*` resolves to project root (configured in `tsconfig.json`)
 
 ### Error Handling
 
-- API routes return `{ error, details }` with appropriate status codes
-- Validation errors return 400 with Zod error flatten
-- Missing resources return 401/404 based on context
-- Server errors return 500
+API routes follow a consistent error response pattern:
+
+```typescript
+// Success response
+{ data: { /* payload */ }, error: null }
+
+// Error response
+{ data: null, error: { message: string, details?: any }, status: number }
+```
+
+- Validation errors: 400 with Zod error flatten
+- Authentication failures: 401
+- Resource not found: 404
+- Server errors: 500
 
 ### State Management
 
-- Login state stored in `sessionStorage` as JSON (key: 'socio')
+**Admin**: Session-based (server-side or HTTP-only cookies)
+
+**Familia**: 
+- Login state stored in `sessionStorage` as JSON
 - Dashboard fetches associated data on mount via API calls
-- useEffect handles redirect if session missing
+- `useEffect` handles redirect if session missing
+- Logout clears `sessionStorage`
 
 ### Environment Setup
 
@@ -151,8 +234,9 @@ NODE_ENV="development"  # or "production"
 1. `npm install` - Install dependencies
 2. `npx prisma generate` - Generate Prisma client
 3. `npx prisma db push` - Sync schema with database
-4. `npm run seed` - Create initial admin user (usuario: admin, password: admin) and Spain data
-5. `npm run dev` - Start development server
+4. `npm run seed` - Create initial admin user and Spain data
+5. `npm run seed:larioja` - Load La Rioja postal codes and street types
+6. `npm run dev` - Start development server
 
 ### Common Development Patterns
 
@@ -160,65 +244,137 @@ NODE_ENV="development"  # or "production"
 1. Create route handler in `/app/api/path/route.ts`
 2. Define Zod schema in `/app/lib/validations.ts` if input validation needed
 3. Use `prisma` singleton from `/app/lib/db.ts` for database operations
-4. Return `{ error, details }` format for errors with appropriate status codes
+4. Return consistent error/success response format with appropriate status codes
 
 **Working with dates**:
 - UI accepts/displays: `DD/MM/YYYY` format
 - Database stores: `YYYY-MM-DD` format
-- Use `formatDateForDB()` and `formatDateForDisplay()` helpers in `/app/lib/validations.ts`
+- Always use helper functions to avoid format mismatch bugs
 
-**Document validation**:
-- Use `validateDocumentByType()` helper for DNI/NIE/Passport validation
-- DNI pattern: 8 digits + letter (e.g., 12345678A)
-- NIE pattern: X/Y/Z + 7 digits + letter (e.g., X1234567A)
-- Passport/Other: 10-15 alphanumeric characters
+**Adding new location data** (countries, states, cities):
+- Spain (España): Created by base seed
+- La Rioja municipalities: Postal codes (26xxx range) and street types created by `npm run seed:larioja`
+- Use Prisma Studio (`npx prisma studio`) to verify data is persisted
 
 **Debugging database queries**:
-- Prisma logs in dev mode: check console for `query`, `error`, `warn` logs
-- Use `npx prisma studio` for UI-based database exploration
-- Check `/app/lib/db.ts` for Prisma client configuration
+- Check Next.js dev server console for Prisma logs
+- Use `npx prisma studio` for interactive database exploration
+- Verify schema changes with `git diff prisma/schema.prisma`
+
+## React Compiler & Performance
+
+This project uses **Next.js Babel React Compiler** for automatic memoization and optimization.
+
+**Configuration**: `next.config.ts` with `reactCompiler: true`
+
+**Important Notes**:
+- The compiler automatically memoizes components and values
+- May affect debugging behavior in browser DevTools
+- Use React DevTools Profiler if performance issues arise
+- No manual `memo()` or `useMemo()` needed (compiler handles it)
+
+For debugging issues related to the compiler:
+- Check browser console for unexpected re-renders
+- Disable compiler temporarily by setting `reactCompiler: false` to isolate issues
+- Refer to [Next.js React Compiler documentation](https://nextjs.org/docs/app/building-your-application/optimizing/react-compiler)
 
 ## Known Limitations & Next Steps
 
-### Security
-- Current sessionStorage login is **NOT production-ready**
-- TODO: Migrate to JWT with secure HTTP-only cookies
-- TODO: Add CSRF protection
-- TODO: Implement server-side session validation
+### Security Issues (Must Fix Before Production)
+
+- ⚠️ **CRITICAL**: Familia sessionStorage authentication is insecure - migrate to JWT with HTTP-only cookies
+- ⚠️ Admin default credentials hardcoded in seed (username: `admin`, password: `admin`)
+- **Planned**: CSRF protection middleware
+- **Planned**: Server-side session validation
+- **Planned**: Secure admin password change mechanism
+
+### Technical Debt
+
+- **Duplicate components**: `FamiliaMemberForm.tsx` vs `MiembroForm.tsx`, `AddAsociadoModal.tsx` (consolidate or remove)
+- **Legacy terminology**: "Socio/Asociado" in component names and routes (use "Familia/Miembro" in new code)
+- **Legacy routes**: `/app/socios/` structure still exists (migrate to `/app/familias/`)
 
 ### Features In Progress
-- Address management UI (route exists, form placeholder in dashboard)
-- Editable family member table (view-only currently)
-- Export/PDF generation
+
+- Address management UI refinement
+- Editable family member table (currently view-only)
+- Export/PDF generation for family records
+- Bulk operations (import, update multiple records)
 
 ### Planned Improvements
+
 - Pagination for large datasets
 - Redis caching for filter data
-- Analytics and monitoring
-- E2E tests (Playwright)
+- Error tracking and performance monitoring
+- Internationalization (multi-language support)
+- Accessibility improvements (WCAG compliance)
 
-## Important Notes
+## Important Notes & Troubleshooting
 
-**Prisma Client Generation**:
-After pulling schema changes from git, always run `npx prisma generate` to ensure the Prisma client is up-to-date.
+### After Pulling Code
 
-**Database Schema Changes**:
-When modifying `prisma/schema.prisma`, push changes with `npx prisma db push`. This will update both the database and generate migrations.
+**Always run**: `npx prisma generate` after pulling schema changes to regenerate the Prisma client.
 
-**React Compiler**:
-This project uses Next.js Babel React Compiler (`reactCompiler: true` in `next.config.ts`). This may affect debugging—check browser DevTools if unexpected behavior occurs.
+### Database Schema Changes
 
-**Admin Default Credentials** (from seed):
+When modifying `prisma/schema.prisma`:
+1. Run `npx prisma db push` to sync with database
+2. Verify with `npx prisma studio` that changes persisted
+3. Commit both `schema.prisma` and generated migration files
+
+### React 19 + React Compiler (Experimental)
+
+This project uses React 19 and Next.js React Compiler (`reactCompiler: true` in `next.config.ts`):
+- Automatic memoization of components and values
+- Debugging may behave differently in DevTools
+- If unexpected re-renders occur, check React DevTools Profiler first
+- To isolate compiler issues, temporarily set `reactCompiler: false`
+
+### Common Issues
+
+**Date Format Mismatches**:
+- UI displays/accepts: `DD/MM/YYYY`
+- Database stores: `YYYY-MM-DD`
+- **Always use helper functions** from `/app/lib/validations.ts`: `formatDateForDB()` and `formatDateForDisplay()`
+- Common bug: Forgetting to convert dates before API calls
+
+**Empty Dropdowns in Address Forms**:
+- Cause: La Rioja seed data not loaded
+- Solution: Run `npm run seed:larioja` to load postal codes and street types
+- Verify in Prisma Studio: check `codigos_postales` and `tipos_via` tables
+
+**Authentication Redirects Not Working**:
+- Admin: Check server-side session configuration
+- Familia: Check `sessionStorage.getItem('familia')` in browser DevTools
+- Clear sessionStorage if stale data exists
+
+**Prisma Client Import Errors**:
+- Run `npx prisma generate` to regenerate client
+- Restart dev server: `npm run dev`
+- If persists, delete `node_modules/.prisma` and regenerate
+
+### Security Warnings
+
+⚠️ **Admin Default Credentials** (change immediately in production):
 - Username: `admin`
 - Password: `admin`
-Change these in production after first login.
+- Update via SQL: `UPDATE admins SET password = 'nuevo-hash-bcrypt' WHERE usuario = 'admin'`
 
-## File Locations Reference
+⚠️ **Familia sessionStorage Authentication**: NOT production-ready. See Known Limitations section.
 
-- Route handlers: `/app/api/**/route.ts`
-- React components: `/app/components/*.tsx`
-- Pages: `/app/page.tsx`, `/app/socios/page.tsx`, `/app/dashboard/[id]/page.tsx`
-- Utilities: `/app/lib/*.ts` (validations, db client)
-- Database schema: `/prisma/schema.prisma`
-- Database seed: `/prisma/seed.ts`
-- Type definitions: `tsconfig.json` with `@/*` path alias
+### Required Seeds for Full Functionality
+
+1. **Base seed** (`npm run seed`): Admin user, Spain country data
+2. **La Rioja seed** (`npm run seed:larioja`): Postal codes (26xxx) and street types - **Required** for address forms to work
+
+## Deployment Notes
+
+For Vercel deployment:
+
+1. Ensure `postinstall` script in `package.json` includes `prisma generate`
+2. Set `DATABASE_URL` environment variable in Vercel Settings
+3. Run base seed on first deploy: `npm run seed`
+4. Run La Rioja seed: `npm run seed:larioja`
+5. Verify address/postal code features work after deployment
+
+See `DEPLOYMENT.md` for detailed deployment instructions.

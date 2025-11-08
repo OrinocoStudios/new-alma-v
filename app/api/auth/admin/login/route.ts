@@ -6,9 +6,12 @@ import { LoginAdminSchema } from '@/app/lib/validations';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log('Login attempt with:', { usuario: body.usuario, hasPassword: !!body.password });
+    
     const result = LoginAdminSchema.safeParse(body);
 
     if (!result.success) {
+      console.log('Validation failed:', result.error.flatten());
       return NextResponse.json(
         { 
           error: 'Validación fallida',
@@ -19,11 +22,14 @@ export async function POST(request: NextRequest) {
     }
 
     const { usuario, password } = result.data;
+    console.log('Parsed data:', { usuario, passwordLength: password?.length });
 
     // Buscar admin por usuario
     const admin = await prisma.admin.findUnique({
       where: { usuario },
     });
+    
+    console.log('Admin found:', admin ? { id: admin.id, usuario: admin.usuario, activo: admin.activo } : 'null');
 
     if (!admin) {
       return NextResponse.json(
@@ -40,7 +46,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar contraseña
+    console.log('Comparing password for admin:', admin.usuario);
     const passwordMatch = await bcrypt.compare(password, admin.password);
+    console.log('Password match:', passwordMatch);
 
     if (!passwordMatch) {
       return NextResponse.json(

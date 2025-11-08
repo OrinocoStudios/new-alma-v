@@ -1,17 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { AddSocioForm } from './AddSocioForm';
+import { CreateFamiliaForm } from './CreateFamiliaForm';
 
-interface Socio {
+interface Familia {
   id: number;
-  id_socio: number;
-  nombres: string;
-  apellido1re: string;
-  apellido2do: string;
+  id_socio?: number;
   apellidos: string;
-  miembroprincipal: boolean;
+  id_direccion?: number;
+  socioPrincipal?: {
+    id: number;
+    id_socio?: number;
+    nombres: string;
+    apellido1re: string;
+    apellido2do: string;
+    usuario?: string;
+  };
   familyMembersCount: number;
 }
 
@@ -24,13 +29,59 @@ interface Admin {
   rol: string;
 }
 
-export function SociosPanel() {
+export function FamiliasPanel() {
   const router = useRouter();
   const [admin, setAdmin] = useState<Admin | null>(null);
-  const [socios, setSocios] = useState<Socio[]>([]);
+  const [familias, setFamilias] = useState<Familia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Calcular próximo ID de socio consecutivo
+  const nextSocioId = useMemo(() => {
+    if (!familias || familias.length === 0) return 1;
+    const maxId = Math.max(...familias.filter(f => f.id_socio).map(f => f.id_socio!));
+    return maxId + 1;
+  }, [familias]);
+
+  const fetchFamilias = async (adminId: number) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/familias?adminId=${adminId}`);
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Error al obtener familias');
+      }
+
+      const data = await response.json();
+      setFamilias(data.familias);
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+      console.error('Error fetching familias:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFamiliaAdded = () => {
+    setShowAddForm(false);
+    if (admin) {
+      fetchFamilias(admin.id);
+    }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('admin');
+    router.push('/');
+  };
+
+  const handleNavigateToFamilia = (familiaId: number) => {
+    console.log('Navigating to family with ID:', familiaId);
+    console.log('Family object:', familias.find(f => f.id === familiaId));
+    router.push(`/familias/${familiaId}`);
+  };
 
   useEffect(() => {
     // Obtener datos del admin desde sessionStorage
@@ -43,50 +94,13 @@ export function SociosPanel() {
     try {
       const adminData = JSON.parse(sessionAdmin);
       setAdmin(adminData);
-      fetchSocios(adminData.id);
+      fetchFamilias(adminData.id);
     } catch (err) {
       console.error('Error parsing admin data:', err);
       setError('Error al cargar sesión');
       router.push('/');
     }
   }, [router]);
-
-  const fetchSocios = async (adminId: number) => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/socios?adminId=${adminId}`);
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Error al obtener socios');
-      }
-
-      const data = await response.json();
-      setSocios(data.socios);
-      setError('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-      console.error('Error fetching socios:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSocioAdded = () => {
-    setShowAddForm(false);
-    if (admin) {
-      fetchSocios(admin.id);
-    }
-  };
-
-  const handleLogout = () => {
-    sessionStorage.removeItem('admin');
-    router.push('/');
-  };
-
-  const handleNavigateToSocio = (socioId: number) => {
-    router.push(`/socios/${socioId}`);
-  };
 
   if (!admin) {
     return null;
@@ -100,7 +114,7 @@ export function SociosPanel() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Panel de Socios
+                Panel de Familias
               </h1>
               <p className="text-gray-600 mt-1">
                 Administrador: {admin.nombres} {admin.apellido1re}
@@ -125,19 +139,19 @@ export function SociosPanel() {
           </div>
         )}
 
-        {/* Add Socio Button */}
+        {/* Add Familia Button */}
         <div className="mb-6">
           {!showAddForm ? (
             <button
               onClick={() => setShowAddForm(true)}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition"
             >
-              + Agregar Nuevo Socio
+              + Agregar Nueva Familia
             </button>
           ) : (
             <div className="bg-white rounded-lg shadow p-6 mb-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-gray-900">Crear Nuevo Socio</h2>
+                <h2 className="text-xl font-bold text-gray-900">Crear Nueva Familia</h2>
                 <button
                   onClick={() => setShowAddForm(false)}
                   className="text-gray-500 hover:text-gray-700 text-2xl"
@@ -145,23 +159,24 @@ export function SociosPanel() {
                   ×
                 </button>
               </div>
-              <AddSocioForm
+              <CreateFamiliaForm
                 adminId={admin.id}
-                onSocioAdded={handleSocioAdded}
+                nextSocioId={nextSocioId}
+                onFamiliaAdded={handleFamiliaAdded}
               />
             </div>
           )}
         </div>
 
-        {/* Socios Table */}
+        {/* Familias Table */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {loading ? (
             <div className="p-6 text-center text-gray-600">
-              Cargando socios...
+              Cargando familias...
             </div>
-          ) : socios.length === 0 ? (
+          ) : familias.length === 0 ? (
             <div className="p-6 text-center text-gray-600">
-              No hay socios registrados. {showAddForm ? '' : 'Haz clic en "Agregar Nuevo Socio" para comenzar.'}
+              No hay familias registradas. {showAddForm ? '' : 'Haz clic en \"Agregar Nueva Familia\" para comenzar.'}
             </div>
           ) : (
             <table className="min-w-full divide-y divide-gray-200">
@@ -171,16 +186,13 @@ export function SociosPanel() {
                     ID
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Nombre
+                    Apellidos de Familia
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Apellidos
+                    Miembro Principal
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Miembros Familia
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Estado
+                    Miembros
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Acciones
@@ -188,34 +200,28 @@ export function SociosPanel() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {socios.map((socio) => (
-                  <tr key={socio.id} className="hover:bg-gray-50">
+                {familias.map((familia) => (
+                  <tr key={familia.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {socio.id_socio}
+                      {familia.id_socio || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {socio.nombres}
+                      {familia.apellidos}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {socio.apellidos}
+                      {familia.socioPrincipal ? 
+                        `${familia.socioPrincipal.nombres} ${familia.socioPrincipal.apellido1re}` : 
+                        'No asignado'
+                      }
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <span className="bg-blue-100 text-blue-800 py-1 px-2 rounded-full text-xs">
-                        {socio.familyMembersCount}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={`py-1 px-2 rounded-full text-xs font-medium ${
-                        socio.miembroprincipal
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {socio.miembroprincipal ? 'Principal' : 'Secundario'}
+                        {familia.familyMembersCount}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
-                        onClick={() => handleNavigateToSocio(socio.id)}
+                        onClick={() => handleNavigateToFamilia(familia.id)}
                         className="text-indigo-600 hover:text-indigo-900 mr-4"
                       >
                         Ver Detalles

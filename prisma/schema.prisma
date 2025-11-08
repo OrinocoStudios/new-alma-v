@@ -7,133 +7,125 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Tabla de países
 model Pais {
-  id         Int    @id @default(autoincrement())
-  pais_nro   Int    @unique
-  pais       String @db.VarChar(50)
-  codigo     String @db.VarChar(3)
-  iso_2      String @db.VarChar(2)
-  iso_3      String @db.VarChar(3)
-  moneda     String @db.VarChar(15)
-  continente String @db.VarChar(4)
-
-  // Relaciones
-  estados         Estado[]       @relation("EstadoToPais")
+  id              Int            @id @default(autoincrement())
+  pais_nro        Int            @unique
+  pais            String         @db.VarChar(50)
+  codigo          String         @db.VarChar(3)
+  iso_2           String         @db.VarChar(2)
+  iso_3           String         @db.VarChar(3)
+  moneda          String         @db.VarChar(15)
+  continente      String         @db.VarChar(4)
   ciudades        Ciudad[]       @relation("CiudadToPais")
   codigosPostales CodigoPostal[] @relation("CodigoPostalToPais")
-  asociados       Asociado[]     @relation("birthCountry")
-  nacionalidades  Asociado[]     @relation("nationality")
+  estados         Estado[]       @relation("EstadoToPais")
+  nacionalidades  Miembro[]      @relation("nationality")
+  miembros        Miembro[]      @relation("birthCountry")
 
   @@map("paises")
 }
 
-// Tabla de estados (solo para Venezuela)
 model Estado {
-  id            Int    @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   id_pais       Int
-  id_estado_cid String @db.VarChar(5)
-  estado        String @db.VarChar(50)
-  capital       String @db.VarChar(50)
-
-  // Relaciones
-  pais      Pais       @relation("EstadoToPais", fields: [id_pais], references: [id])
-  ciudades  Ciudad[]   @relation("CiudadToEstado")
-  asociados Asociado[] @relation("birthState")
+  id_estado_cid String    @db.VarChar(5)
+  estado        String    @db.VarChar(50)
+  capital       String    @db.VarChar(50)
+  ciudades      Ciudad[]  @relation("CiudadToEstado")
+  pais          Pais      @relation("EstadoToPais", fields: [id_pais], references: [id])
+  miembros      Miembro[] @relation("birthState")
 
   @@map("estados")
 }
 
-// Tabla de ciudades
 model Ciudad {
-  id        Int    @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   id_pais   Int
   id_estado Int?
-  id_ciudad Int    @unique
-  ciudad    String @db.VarChar(50)
-
-  // Relaciones
-  pais      Pais       @relation("CiudadToPais", fields: [id_pais], references: [id])
-  estado    Estado?    @relation("CiudadToEstado", fields: [id_estado], references: [id])
-  asociados Asociado[] @relation("birthCity")
+  id_ciudad Int       @unique
+  ciudad    String    @db.VarChar(50)
+  estado    Estado?   @relation("CiudadToEstado", fields: [id_estado], references: [id])
+  pais      Pais      @relation("CiudadToPais", fields: [id_pais], references: [id])
+  miembros  Miembro[] @relation("birthCity")
 
   @@map("ciudades")
 }
 
-// Tabla de códigos postales
 model CodigoPostal {
-  id        Int    @id @default(autoincrement())
-  provincia String @db.VarChar(50)
-  ciudad    String @db.VarChar(50)
-  cp        String @unique @db.VarChar(5)
-  id_pais   Int
-
-  // Relaciones
+  id          Int         @id @default(autoincrement())
+  provincia   String      @db.VarChar(50)
+  ciudad      String      @db.VarChar(50)
+  cp          String      @unique @db.VarChar(5)
+  id_pais     Int
   pais        Pais        @relation("CodigoPostalToPais", fields: [id_pais], references: [id])
   direcciones Direccion[] @relation("DireccionToCodigoPostal")
 
   @@map("codigos_postales")
 }
 
-// Tabla de tipos de vía
 model TipoVia {
-  id       Int    @id @default(autoincrement())
-  tipo_via String @unique @db.VarChar(50)
-
-  // Relaciones
+  id          Int         @id @default(autoincrement())
+  tipo_via    String      @unique @db.VarChar(50)
   direcciones Direccion[] @relation("DireccionToTipoVia")
 
   @@map("tipos_via")
 }
 
-// Tabla de administradores
 model Admin {
-  id             Int      @id @default(autoincrement())
-  usuario        String   @unique @db.VarChar(50)
-  password       String   @db.VarChar(255)
-  nombres        String   @db.VarChar(30)
-  apellido1re    String   @db.VarChar(15)
-  apellido2do    String   @db.VarChar(15)
-  rol            String   @default("admin") @db.VarChar(20) // admin, moderator
-  activo         Int      @default(1) @db.SmallInt
-  fecha_creacion DateTime @default(now())
-
-  // Relaciones
-  socios Socio[]
+  id             Int       @id @default(autoincrement())
+  usuario        String    @unique @db.VarChar(50)
+  password       String    @db.VarChar(255)
+  nombres        String    @db.VarChar(30)
+  apellido1re    String    @db.VarChar(15)
+  apellido2do    String    @db.VarChar(15)
+  rol            String    @default("admin") @db.VarChar(20)
+  activo         Int       @default(1) @db.SmallInt
+  fecha_creacion DateTime  @default(now())
+  familias       Familia[] @relation("AdminFamilias")
+  socios         Socio[]
 
   @@map("admins")
 }
 
-// Tabla de socios (cuenta principal)
-model Socio {
-  id               Int    @id @default(autoincrement())
-  id_socio         Int    @unique
-  id_admin         Int
-  nombres          String @db.VarChar(30)
-  apellido1re      String @db.VarChar(15)
-  apellido2do      String @db.VarChar(15)
-  miembroprincipal Int    @default(1) @db.SmallInt
+model Familia {
+  id             Int         @id @default(autoincrement())
+  id_socio       Int         @unique
+  apellidos      String      @db.VarChar(30)
+  id_admin       Int         @default(1)
+  direcciones    Direccion[] @relation("DireccionToFamilia")
+  adminCreator   Admin       @relation("AdminFamilias", fields: [id_admin], references: [id])
+  socioPrincipal Socio       @relation("FamiliaToSocioPrincipal", fields: [id_socio], references: [id])
+  miembros       Miembro[]
 
-  // Relaciones
-  admin       Admin       @relation(fields: [id_admin], references: [id])
-  asociados   Asociado[]
-  direcciones Direccion[] @relation("DireccionToSocio")
+  @@map("familias")
+}
+
+model Socio {
+  id          Int      @id @default(autoincrement())
+  id_socio    Int      @unique
+  id_admin    Int
+  nombres     String   @db.VarChar(30)
+  apellido1re String   @db.VarChar(15)
+  apellido2do String   @db.VarChar(15)
+  usuario     String?  @unique @db.VarChar(50)
+  password    String?  @db.VarChar(255)
+  familia     Familia? @relation("FamiliaToSocioPrincipal")
+  admin       Admin    @relation(fields: [id_admin], references: [id])
 
   @@map("socios")
 }
 
-// Tabla de asociados (grupo familiar)
-model Asociado {
+model Miembro {
   id                Int      @id @default(autoincrement())
-  id_socio          Int
-  id_asociado       Int
-  tipo_documento    String   @db.VarChar(3) // DNI, PS (pasaporte), N (NIE), OTR (otros)
+  id_familia        Int
+  id_miembro        Int
+  tipo_documento    String   @db.VarChar(3)
   numero_documento  String   @unique @db.VarChar(15)
   nombres           String   @db.VarChar(30)
   apellido1re       String   @db.VarChar(15)
   apellido2do       String   @db.VarChar(15)
   fecha_nacimiento  DateTime @db.Date
-  genero            String   @db.VarChar(1) // H (hembra), M (macho)
+  genero            String   @db.VarChar(1)
   nacionalidad      Int
   pais_nacimiento   Int
   estado_nacimiento Int?
@@ -141,39 +133,35 @@ model Asociado {
   numero_telefonico String?  @db.VarChar(20)
   ocupacion         String?  @db.VarChar(100)
   profesion         String?  @db.VarChar(100)
-  miembroPrincipal  Int      @default(0) @db.SmallInt
+  esPrincipal       Int      @default(0) @db.SmallInt
   alimentacion1     Int      @default(1) @db.SmallInt
+  rango_ingresos    String?  @db.VarChar(20)
+  ciudadNacimiento  Ciudad?  @relation("birthCity", fields: [ciudad_nacimiento], references: [id])
+  estadoNacimiento  Estado?  @relation("birthState", fields: [estado_nacimiento], references: [id])
+  familia           Familia  @relation(fields: [id_familia], references: [id])
+  paisNacionalidad  Pais     @relation("nationality", fields: [nacionalidad], references: [id])
+  paisNacimiento    Pais     @relation("birthCountry", fields: [pais_nacimiento], references: [id])
 
-  // Relaciones
-  socio            Socio   @relation(fields: [id_socio], references: [id])
-  paisNacionalidad Pais    @relation("nationality", fields: [nacionalidad], references: [id])
-  paisNacimiento   Pais    @relation("birthCountry", fields: [pais_nacimiento], references: [id])
-  estadoNacimiento Estado? @relation("birthState", fields: [estado_nacimiento], references: [id])
-  ciudadNacimiento Ciudad? @relation("birthCity", fields: [ciudad_nacimiento], references: [id])
-
-  @@unique([id_socio, id_asociado])
-  @@map("asociados")
+  @@unique([id_familia, id_miembro])
+  @@map("miembros")
 }
 
-// Tabla de direcciones
 model Direccion {
-  id            Int    @id @default(autoincrement())
-  id_socio      Int
+  id            Int          @id @default(autoincrement())
+  id_familia    Int
   id_tipo_via   Int
-  nombre_via    String @db.VarChar(255)
-  numero        String @db.VarChar(10)
-  portal        String @db.VarChar(5)
-  piso          String @db.VarChar(10)
-  apartamento   String @db.VarChar(10)
-  pueblo        String @db.VarChar(1) // 1=sector, 2=organización, 3=pueblo
-  nombre_pueblo String @db.VarChar(255)
-  codigo_postal String @db.VarChar(5)
-  activa        Int    @default(1) @db.SmallInt
-
-  // Relaciones
-  socio        Socio        @relation("DireccionToSocio", fields: [id_socio], references: [id])
-  tipoVia      TipoVia      @relation("DireccionToTipoVia", fields: [id_tipo_via], references: [id])
-  codigoPostal CodigoPostal @relation("DireccionToCodigoPostal", fields: [codigo_postal], references: [cp])
+  nombre_via    String       @db.VarChar(255)
+  numero        String       @db.VarChar(10)
+  portal        String       @db.VarChar(5)
+  piso          String       @db.VarChar(10)
+  apartamento   String       @db.VarChar(10)
+  pueblo        String       @db.VarChar(1)
+  nombre_pueblo String       @db.VarChar(255)
+  codigo_postal String       @db.VarChar(5)
+  activa        Int          @default(1) @db.SmallInt
+  codigoPostal  CodigoPostal @relation("DireccionToCodigoPostal", fields: [codigo_postal], references: [cp])
+  familia       Familia      @relation("DireccionToFamilia", fields: [id_familia], references: [id])
+  tipoVia       TipoVia      @relation("DireccionToTipoVia", fields: [id_tipo_via], references: [id])
 
   @@map("direcciones")
 }

@@ -2,16 +2,25 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AsociadoForm } from '@/app/components/AsociadoForm';
+import { MiembroForm } from '@/app/components/MiembroForm';
 
 interface DashboardParams {
   params: { id: string };
 }
 
-interface Asociado {
+interface Familia {
   id: number;
   id_socio: number;
-  id_asociado: number;
+  apellidos: string;
+  id_direccion?: number;
+  miembros: Miembro[];
+  direccion?: Direccion;
+}
+
+interface Miembro {
+  id: number;
+  id_familia: number;
+  id_miembro: number;
   tipo_documento: string;
   numero_documento: string;
   nombres: string;
@@ -26,14 +35,30 @@ interface Asociado {
   numero_telefonico: string;
   ocupacion: string;
   profesion: string;
-  miembroPrincipal: number;
+  esPrincipal: number;
   alimentacion1: number;
+  familia?: Familia;
+}
+
+interface Direccion {
+  id: number;
+  id_familia: number;
+  id_tipo_via: number;
+  nombre_via: string;
+  numero: string;
+  portal: string;
+  piso: string;
+  apartamento: string;
+  pueblo: number;
+  nombre_pueblo: string;
+  codigo_postal: string;
+  activa: number;
 }
 
 export default function DashboardPage({ params }: DashboardParams) {
   const router = useRouter();
-  const [socio, setSocio] = useState<{ id: number; id_socio: number; nombres: string; apellido1re: string; apellido2do: string } | null>(null);
-  const [asociados, setAsociados] = useState<Asociado[]>([]);
+  const [familia, setFamilia] = useState<Familia | null>(null);
+  const [miembros, setMiembros] = useState<Miembro[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'familia' | 'direccion'>('familia');
 
@@ -45,19 +70,43 @@ export default function DashboardPage({ params }: DashboardParams) {
     }
 
     const parsed = JSON.parse(socioData);
-    setSocio(parsed);
-    loadAsociados(parsed.id);
+    // Si los datos incluyen familia, usarlo directamente
+    if (parsed.familia) {
+      setFamilia(parsed.familia);
+      setMiembros(parsed.familia.miembros || []);
+    } else {
+      // Legacy support: buscar por id_familia si está disponible
+      if (parsed.id_familia) {
+        loadFamilia(parsed.id_familia);
+      }
+    }
+    setLoading(false);
   }, [router]);
 
-  const loadAsociados = async (socioId: number) => {
+  const loadFamilia = async (familiaId: number) => {
     try {
-      const response = await fetch(`/api/asociados?id_socio=${socioId}`);
+      const response = await fetch(`/api/familias/${familiaId}`);
+      if (!response.ok) {
+        throw new Error('Error al cargar familia');
+      }
       const data = await response.json();
-      setAsociados(data);
+      setFamilia(data.familia);
+      setMiembros(data.familia.miembros || []);
     } catch (err) {
-      console.error('Error loading asociados:', err);
+      console.error('Error loading familia:', err);
+      setError('Error al cargar datos de la familia');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMiembros = async (familiaId: number) => {
+    try {
+      const response = await fetch(`/api/miembros?id_familia=${familiaId}`);
+      const data = await response.json();
+      setMiembros(data);
+    } catch (err) {
+      console.error('Error loading miembros:', err);
     }
   };
 
@@ -66,13 +115,15 @@ export default function DashboardPage({ params }: DashboardParams) {
     router.push('/');
   };
 
-  const handleSaveAsociado = () => {
-    if (socio) {
-      loadAsociados(socio.id);
+  const handleSaveMiembro = () => {
+    if (familia) {
+      loadMiembros(familia.id);
     }
   };
 
-  if (!socio) return null;
+  const [error, setError] = useState('');
+
+  if (!familia && loading) return null;
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -81,9 +132,13 @@ export default function DashboardPage({ params }: DashboardParams) {
         <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">Alma Venezuela Connect</h1>
-            <p className="text-blue-100">
-              Bienvenido, {socio.nombres} {socio.apellido1re}
-            </p>
+            {familia && (
+              <p className="text-blue-100">
+                Familia: {familia.apellidos} | Bienvenido,
+                {familia.miembros?.find(m => m.esPrincipal === 1)?.nombres} 
+                {familia.miembros?.find(m => m.esPrincipal === 1)?.apellido1re}
+              </p>
+            )}
           </div>
           <button
             onClick={handleLogout}
@@ -131,7 +186,7 @@ export default function DashboardPage({ params }: DashboardParams) {
                 <div className="text-center py-8">
                   <p className="text-gray-600">Cargando...</p>
                 </div>
-              ) : asociados.length === 0 ? (
+              ) : miembros.length === 0 ? (
                 <div className="text-center py-8 bg-blue-50 rounded border border-blue-200">
                   <p className="text-gray-600 mb-4">No hay miembros familiares registrados</p>
                 </div>
@@ -148,15 +203,15 @@ export default function DashboardPage({ params }: DashboardParams) {
                       </tr>
                     </thead>
                     <tbody>
-                      {asociados.map((a) => (
-                        <tr key={a.id} className={a.miembroPrincipal === 1 ? 'bg-red-50 font-semibold' : 'hover:bg-gray-50'}>
-                          <td className="px-4 py-2 border-b">{a.nombres}</td>
-                          <td className="px-4 py-2 border-b">{a.numero_documento}</td>
-                          <td className="px-4 py-2 border-b">{a.apellido1re} {a.apellido2do}</td>
-                          <td className="px-4 py-2 border-b">{new Date(a.fecha_nacimiento).toLocaleDateString('es-ES')}</td>
+                      {miembros.map((m) => (
+                        <tr key={m.id} className={m.esPrincipal === 1 ? 'bg-red-50 font-semibold' : 'hover:bg-gray-50'}>
+                          <td className="px-4 py-2 border-b">{m.nombres}</td>
+                          <td className="px-4 py-2 border-b">{m.numero_documento}</td>
+                          <td className="px-4 py-2 border-b">{m.apellido1re} {m.apellido2do}</td>
+                          <td className="px-4 py-2 border-b">{new Date(m.fecha_nacimiento).toLocaleDateString('es-ES')}</td>
                           <td className="px-4 py-2 border-b">
-                            <span className={a.miembroPrincipal === 1 ? 'bg-yellow-200 px-2 py-1 rounded text-xs font-semibold' : 'text-gray-600'}>
-                              {a.miembroPrincipal === 1 ? 'Principal' : 'Miembro'}
+                            <span className={m.esPrincipal === 1 ? 'bg-yellow-200 px-2 py-1 rounded text-xs font-semibold' : 'text-gray-600'}>
+                              {m.esPrincipal === 1 ? 'Principal' : 'Miembro'}
                             </span>
                           </td>
                         </tr>
@@ -168,7 +223,7 @@ export default function DashboardPage({ params }: DashboardParams) {
             </div>
 
             {/* Formulario para agregar miembro */}
-            <AsociadoForm id_socio={socio.id} onSave={handleSaveAsociado} />
+            {familia && <MiembroForm id_familia={familia.id} onSave={handleSaveMiembro} />}
           </div>
         )}
 
