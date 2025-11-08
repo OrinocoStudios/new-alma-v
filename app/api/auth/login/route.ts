@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
           id: socio.familia.id,
           apellidos: socio.familia.apellidos,
           miembros: socio.familia.miembros,
-          direccion: socio.familia.direccion
+          direcciones: socio.familia.direcciones
         } : null
       });
     }

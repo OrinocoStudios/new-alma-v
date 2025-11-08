@@ -62,6 +62,16 @@ export async function GET(
         include: {
           familia: {
             include: {
+              socioPrincipal: {
+                select: {
+                  id: true,
+                  id_socio: true,
+                  nombres: true,
+                  apellido1re: true,
+                  apellido2do: true,
+                  usuario: true,
+                }
+              },
               miembros: {
                 orderBy: [
                   { esPrincipal: 'desc' }, // El principal primero

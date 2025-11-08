@@ -5,14 +5,32 @@ import { DireccionSchema } from '@/app/lib/validations';
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const id_socio = searchParams.get('id_socio');
+  const id_familia = searchParams.get('id_familia');
 
-  if (!id_socio) {
-    return NextResponse.json({ error: 'id_socio required' }, { status: 400 });
+  if (!id_socio && !id_familia) {
+    return NextResponse.json({ error: 'id_socio or id_familia required' }, { status: 400 });
   }
 
   try {
+    let whereClause = {};
+    
+    if (id_familia) {
+      whereClause = { id_familia: parseInt(id_familia) };
+    } else if (id_socio) {
+      // Buscar familia por id_socio
+      const familia = await prisma.familia.findUnique({
+        where: { id_socio: parseInt(id_socio) }
+      });
+      
+      if (!familia) {
+        return NextResponse.json({ error: 'Familia not found' }, { status: 404 });
+      }
+      
+      whereClause = { id_familia: familia.id };
+    }
+    
     const direcciones = await prisma.direccion.findMany({
-      where: { id_socio: parseInt(id_socio) },
+      where: whereClause,
       orderBy: { activa: 'desc' },
     });
 
@@ -38,6 +56,7 @@ export async function POST(request: NextRequest) {
 
     const {
       id_socio,
+      id_familia,
       id_tipo_via,
       nombre_via,
       numero,
@@ -48,6 +67,30 @@ export async function POST(request: NextRequest) {
       nombre_pueblo,
       codigo_postal,
     } = body;
+
+    // Determinar id_familia
+    let familiaId;
+    if (id_familia) {
+      familiaId = parseInt(id_familia);
+    } else if (id_socio) {
+      const familia = await prisma.familia.findUnique({
+        where: { id_socio: parseInt(id_socio) }
+      });
+      
+      if (!familia) {
+        return NextResponse.json(
+          { error: 'Familia not found' },
+          { status: 404 }
+        );
+      }
+      
+      familiaId = familia.id;
+    } else {
+      return NextResponse.json(
+        { error: 'id_socio or id_familia required' },
+        { status: 400 }
+      );
+    }
 
     // Verificar que código postal existe
     const cpExists = await prisma.codigoPostal.findUnique({
@@ -63,7 +106,7 @@ export async function POST(request: NextRequest) {
 
     const direccion = await prisma.direccion.create({
       data: {
-        id_socio: parseInt(id_socio),
+        id_familia: familiaId,
         id_tipo_via: parseInt(id_tipo_via),
         nombre_via,
         numero: numero || '',

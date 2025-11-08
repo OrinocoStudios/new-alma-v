@@ -45,7 +45,6 @@ export async function GET(request: NextRequest) {
         id: familia.id,
         id_socio: familia.socioPrincipal?.id_socio,
         apellidos: familia.apellidos,
-        id_direccion: familia.id_direccion,
         socioPrincipal: familia.socioPrincipal,
         familyMembersCount: familia._count.miembros,
       }))
